@@ -26,8 +26,8 @@ void printError(char *text, int error) {
 }
 
 int main() {
-    pthread_t tid;
-    int error = pthread_create(&tid, NULL, childPrintLines, NULL);
+    pthread_t thread;
+    int error = pthread_create(&thread, NULL, childPrintLines, NULL);
     if (error) {
         printError("Could not create thread", error);
         return EXIT_FAILURE;
