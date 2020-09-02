@@ -24,29 +24,29 @@ void printError(char *text, int error) {
 
 int main() {
     pthread_t thread[NUM_THREADS];
-    ThreadArgs_t threads_args[NUM_THREADS] = {
+    ThreadArgs_t threads_args[] = {
             {4, (char *[]) {
-                    "T1 line 1",
-                    "T1 line 2",
-                    "T1 line 3",
-                    "T1 line 4"}},
+                    "T1 line 1/4",
+                    "T1 line 2/4",
+                    "T1 line 3/4",
+                    "T1 line 4/4"}},
             {6, (char *[]) {
-                    "T2 line 1",
-                    "T2 line 2",
-                    "T2 line 3",
-                    "T2 line 4",
-                    "T2 line 5",
-                    "T2 line 6"}},
+                    "T2 line 1/6",
+                    "T2 line 2/6",
+                    "T2 line 3/6",
+                    "T2 line 4/6",
+                    "T2 line 5/6",
+                    "T2 line 6/6"}},
             {5, (char *[]) {
-                    "T3 line 1",
-                    "T3 line 2",
-                    "T3 line 3",
-                    "T3 line 4",
-                    "T3 line 5"}},
+                    "T3 line 1/5",
+                    "T3 line 2/5",
+                    "T3 line 3/5",
+                    "T3 line 4/5",
+                    "T3 line 5/5"}},
             {3, (char *[]) {
-                    "T4 line 1",
-                    "T4 line 2",
-                    "T4 line 3"}}
+                    "T4 line 1/3",
+                    "T4 line 2/3",
+                    "T4 line 3/3"}}
     };
 
     int error;

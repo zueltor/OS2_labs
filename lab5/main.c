@@ -6,6 +6,7 @@
 
 #define NOT_INTERRUPTED 1
 #define NUM_LINES_THRESHOLD 1000
+#define SLEEP_TIME 2
 #define TRUE 1
 #define FALSE 0
 
@@ -57,7 +58,7 @@ int main() {
         printError("Could not create thread", error);
         return EXIT_FAILURE;
     }
-    sleep(2);
+    sleep(SLEEP_TIME);
     pthread_cancel(thread);
     error = pthread_join(thread, NULL);
     if (error) {
