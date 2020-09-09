@@ -4,19 +4,13 @@
 #include <stdlib.h>
 
 #define NUM_LINES 10
+#define PARENT (void*)1
+#define CHILD (void*)0
 
-void *parentPrintLines(void *args) {
-    int num_lines = NUM_LINES;
-    for (int i = 1; i <= num_lines; i++) {
-        printf("Parent thread: line %d\n", i);
-    }
-    return NULL;
-}
-
-void *childPrintLines(void *args) {
-    int num_lines = NUM_LINES;
-    for (int i = 1; i <= num_lines; i++) {
-        printf("Child thread: line %d\n", i);
+void *printLines(void *thread) {
+    char *name = (PARENT == thread) ? "Parent" : "Child";
+    for (int i = 1; i <= NUM_LINES; i++) {
+        printf("%s thread: line %d\n", name, i);
     }
     return NULL;
 }
@@ -27,7 +21,7 @@ void printError(char *text, int error) {
 
 int main() {
     pthread_t thread;
-    int error = pthread_create(&thread, NULL, childPrintLines, NULL);
+    int error = pthread_create(&thread, NULL, printLines, CHILD);
     if (error) {
         printError("Could not create thread", error);
         return EXIT_FAILURE;
@@ -37,6 +31,6 @@ int main() {
         printError("Could not join thread", error);
         return EXIT_FAILURE;
     }
-    parentPrintLines(NULL);
-    pthread_exit(NULL);
+    printLines(PARENT);
+    return EXIT_SUCCESS;
 }
