@@ -10,6 +10,9 @@ typedef struct {
 } ThreadArgs_t;
 
 void *printLines(void *args) {
+    if (NULL == args) {
+        return NULL;
+    }
     int num_lines = ((ThreadArgs_t *) args)->count;
     char **lines = ((ThreadArgs_t *) args)->lines;
     for (int i = 0; i < num_lines; i++) {
@@ -19,6 +22,9 @@ void *printLines(void *args) {
 }
 
 void printError(char *text, int error) {
+    if (NULL == text) {
+        return;
+    }
     fprintf(stderr, "%s: %s\n", text, strerror(error));
 }
 

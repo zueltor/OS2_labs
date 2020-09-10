@@ -13,6 +13,9 @@
 void printError(char *text, int error);
 
 void printEnded(void *args) {
+    if (NULL==args){
+        return;
+    }
     int many_lines_printed = *(int *) args;
     printf("Child thread finished printing.\n");
     if (many_lines_printed) {
@@ -48,6 +51,9 @@ void *foreverPrintLines(void *args) {
 }
 
 void printError(char *text, int error) {
+    if (NULL == text) {
+        return;
+    }
     fprintf(stderr, "%s: %s\n", text, strerror(error));
 }
 

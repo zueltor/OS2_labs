@@ -15,6 +15,9 @@ void *foreverPrintLines(void *args) {
 }
 
 void printError(char *text, int error) {
+    if (NULL == text) {
+        return;
+    }
     fprintf(stderr, "%s: %s\n", text, strerror(error));
 }
 

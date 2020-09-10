@@ -4,11 +4,14 @@
 #include <stdlib.h>
 
 #define NUM_LINES 10
-#define PARENT (void*)1
-#define CHILD (void*)0
+#define PARENT "Parent"
+#define CHILD "Child"
 
-void *printLines(void *thread) {
-    char *name = (PARENT == thread) ? "Parent" : "Child";
+void *printLines(void *thread_name) {
+    if (NULL == thread_name) {
+        return NULL;
+    }
+    char *name = (char *) thread_name;
     for (int i = 1; i <= NUM_LINES; i++) {
         printf("%s thread: line %d\n", name, i);
     }
@@ -16,6 +19,9 @@ void *printLines(void *thread) {
 }
 
 void printError(char *text, int error) {
+    if (NULL == text) {
+        return;
+    }
     fprintf(stderr, "%s: %s\n", text, strerror(error));
 }
 
