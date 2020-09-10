@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #define NOT_INTERRUPTED 1
+#define printError(text,error) fprintf(stderr, text": %s\n",strerror(error));
 
 void *foreverPrintLines(void *args) {
     int line_number = 1;
@@ -12,14 +13,6 @@ void *foreverPrintLines(void *args) {
         printf("Line #%d\n", line_number++);
         pthread_testcancel();
     }
-}
-
-void printError(char *text, int error) {
-    if (NULL == text) {
-        fprintf(stderr, "Error: %s\n", strerror(error));
-        return;
-    }
-    fprintf(stderr, "%s: %s\n", text, strerror(error));
 }
 
 int main() {

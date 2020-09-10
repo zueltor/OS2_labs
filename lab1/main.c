@@ -7,6 +7,8 @@
 #define PARENT "Parent"
 #define CHILD "Child"
 
+#define printError(text,error) fprintf(stderr, text": %s\n",strerror(error));
+
 void *printLines(void *thread_name) {
     if (NULL == thread_name) {
         return NULL;
@@ -16,14 +18,6 @@ void *printLines(void *thread_name) {
         printf("%s thread: line %d\n", name, i);
     }
     return NULL;
-}
-
-void printError(char *text, int error) {
-    if (NULL == text) {
-        fprintf(stderr, "Error: %s\n", strerror(error));
-        return;
-    }
-    fprintf(stderr, "%s: %s\n", text, strerror(error));
 }
 
 int main() {

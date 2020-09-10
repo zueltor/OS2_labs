@@ -4,6 +4,8 @@
 #include <stdlib.h>
 
 #define NUM_THREADS 4
+#define printError(text,error) fprintf(stderr, text": %s\n",strerror(error));
+
 typedef struct {
     int count;
     char **lines;
@@ -19,14 +21,6 @@ void *printLines(void *args) {
         printf("%s\n", lines[i]);
     }
     return NULL;
-}
-
-void printError(char *text, int error) {
-    if (NULL == text) {
-        fprintf(stderr, "Error: %s\n", strerror(error));
-        return;
-    }
-    fprintf(stderr, "%s: %s\n", text, strerror(error));
 }
 
 int main() {

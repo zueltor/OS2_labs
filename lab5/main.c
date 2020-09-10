@@ -9,8 +9,7 @@
 #define SLEEP_TIME 2
 #define TRUE 1
 #define FALSE 0
-
-void printError(char *text, int error);
+#define printError(text,error) fprintf(stderr, text": %s\n",strerror(error));
 
 void printEnded(void *args) {
     if (NULL==args){
@@ -48,14 +47,6 @@ void *foreverPrintLines(void *args) {
             pthread_testcancel();
         }
     pthread_cleanup_pop(TRUE);
-}
-
-void printError(char *text, int error) {
-    if (NULL == text) {
-        fprintf(stderr, "Error: %s\n", strerror(error));
-        return;
-    }
-    fprintf(stderr, "%s: %s\n", text, strerror(error));
 }
 
 int main() {
