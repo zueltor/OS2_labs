@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define NOT_CANCELLED (*not_cancelled)
 #define LINES_COUNT_THRESHOLD 1000
 #define SLEEP_TIME 2
 #define TRUE 1
@@ -25,8 +24,7 @@ void printEnded(void *args) {
 
 void *foreverPrintLines(void *args) {
     int *printed_many_lines;
-    int flag = 1;
-    int *not_cancelled = &flag;
+    int NOT_CANCELLED = 1;
     int error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
     if (error) {
         printError("Could not set cancel state", error);
@@ -59,12 +57,18 @@ int main() {
         printError("Could not create thread", error);
         return EXIT_FAILURE;
     }
-    sleep(SLEEP_TIME);
+
+    int return_value = EXIT_SUCCESS;
+    unsigned int unslept_amount = sleep(SLEEP_TIME);
+    if (unslept_amount > 0) {
+        fprintf(stderr, "Caught signal terminated sleep\n");
+        return_value = EXIT_FAILURE;
+    }
     pthread_cancel(thread);
     error = pthread_join(thread, NULL);
     if (error) {
         printError("Could not join thread", error);
-        return EXIT_FAILURE;
+        return_value = EXIT_FAILURE;
     }
-    return EXIT_SUCCESS;
+    return return_value;
 }

@@ -16,29 +16,29 @@ void *printLines(void *args) {
 int main() {
     pthread_t thread[THREADS_COUNT];
     int error = NO_ERROR;
-    int exit_code = EXIT_SUCCESS;
+    int return_value = EXIT_SUCCESS;
     int working_threads_count = 0;
-    while (NO_ERROR == error) {
-        if (working_threads_count==THREADS_COUNT){
+    do {
+        if (working_threads_count == THREADS_COUNT) {
             break;
         }
         error = pthread_create(&thread[working_threads_count], NULL, printLines, NULL);
-        if (error) {
-            printError("Could not create thread", error);
-            continue;
+        if (!error) {
+            working_threads_count++;
         }
-        working_threads_count++;
+    } while (!error);
+    if (error) {
+        printError("Could not create thread", error);
     }
-
     for (int i = 0; i < working_threads_count; i++) {
         error = pthread_join(thread[i], NULL);
         if (error) {
             printError("Could not join thread", error);
-            exit_code = EXIT_FAILURE;
+            return_value = EXIT_FAILURE;
         }
     }
 
     printf("Threads created: %d\n", working_threads_count);
 
-    return exit_code;
+    return return_value;
 }

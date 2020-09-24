@@ -52,11 +52,11 @@ int main() {
 
     int error;
     int working_threads_count = 0;
-    int exit_code = EXIT_SUCCESS;
+    int return_value = EXIT_SUCCESS;
     for (int i = 0; i < THREADS_COUNT; i++) {
         error = pthread_create(&thread[i], NULL, printLines, &threads_args[i]);
         if (error) {
-            exit_code = EXIT_FAILURE;
+            return_value = EXIT_FAILURE;
             printError("Could not create thread", error);
             break;
         }
@@ -66,9 +66,9 @@ int main() {
     for (int i = 0; i < working_threads_count; i++) {
         error = pthread_join(thread[i], NULL);
         if (error) {
-            exit_code = EXIT_FAILURE;
+            return_value = EXIT_FAILURE;
             printError("Could not join thread", error);
         }
     }
-    return exit_code;
+    return return_value;
 }

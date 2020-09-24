@@ -5,7 +5,8 @@
 #include <unistd.h>
 
 #define NOT_CANCELLED 1
-#define printError(text,error) fprintf(stderr, text": %s\n",strerror(error));
+#define SLEEP_TIME 2
+#define printError(text, error) fprintf(stderr, text": %s\n",strerror(error));
 
 void *foreverPrintLines(void *args) {
     int line_number = 1;
@@ -22,12 +23,17 @@ int main() {
         printError("Could not create thread", error);
         return EXIT_FAILURE;
     }
-    sleep(2);
+    int return_value = EXIT_SUCCESS;
+    unsigned int unslept_amount = sleep(SLEEP_TIME);
+    if (unslept_amount > 0) {
+        fprintf(stderr, "Caught signal terminated sleep\n");
+        return_value = EXIT_FAILURE;
+    }
     pthread_cancel(thread);
     error = pthread_join(thread, NULL);
     if (error) {
         printError("Could not join thread", error);
-        return EXIT_FAILURE;
+        return_value = EXIT_FAILURE;
     }
-    return EXIT_SUCCESS;
+    return return_value;
 }
