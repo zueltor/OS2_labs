@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define NUM_LINES 10
+#define LINES_COUNT 10
 #define PARENT "Parent"
 #define CHILD "Child"
 
@@ -14,7 +14,7 @@ void *printLines(void *thread_name) {
         return NULL;
     }
     char *name = (char *) thread_name;
-    for (int i = 1; i <= NUM_LINES; i++) {
+    for (int i = 1; i <= LINES_COUNT; i++) {
         printf("%s thread: line %d\n", name, i);
     }
     return NULL;

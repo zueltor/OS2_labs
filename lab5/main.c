@@ -4,27 +4,29 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define NOT_INTERRUPTED 1
-#define NUM_LINES_THRESHOLD 1000
+#define NOT_CANCELLED (*not_cancelled)
+#define LINES_COUNT_THRESHOLD 1000
 #define SLEEP_TIME 2
 #define TRUE 1
 #define FALSE 0
-#define printError(text,error) fprintf(stderr, text": %s\n",strerror(error));
+#define printError(text, error) fprintf(stderr, text": %s\n",strerror(error));
 
 void printEnded(void *args) {
-    if (NULL==args){
+    if (NULL == args) {
         return;
     }
     int many_lines_printed = *(int *) args;
     printf("Child thread finished printing.\n");
     if (many_lines_printed) {
-        printf("Number of lines printed: at least %d\n", NUM_LINES_THRESHOLD);
+        printf("Number of lines printed: at least %d\n", LINES_COUNT_THRESHOLD);
     }
     free(args);
 }
 
 void *foreverPrintLines(void *args) {
     int *printed_many_lines;
+    int flag = 1;
+    int *not_cancelled = &flag;
     int error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
     if (error) {
         printError("Could not set cancel state", error);
@@ -39,14 +41,15 @@ void *foreverPrintLines(void *args) {
             pthread_exit(NULL);
         }
         int line_number = 1;
-        while (NOT_INTERRUPTED) {
+        while (NOT_CANCELLED) {
             printf("Line #%d\n", line_number++);
-            if (line_number > NUM_LINES_THRESHOLD) {
+            if (line_number > LINES_COUNT_THRESHOLD) {
                 *printed_many_lines = TRUE;
             }
             pthread_testcancel();
         }
     pthread_cleanup_pop(TRUE);
+    return NULL;
 }
 
 int main() {

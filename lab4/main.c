@@ -4,12 +4,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define NOT_INTERRUPTED 1
+#define NOT_CANCELLED 1
 #define printError(text,error) fprintf(stderr, text": %s\n",strerror(error));
 
 void *foreverPrintLines(void *args) {
     int line_number = 1;
-    while (NOT_INTERRUPTED) {
+    while (NOT_CANCELLED) {
         printf("Line #%d\n", line_number++);
         pthread_testcancel();
     }

@@ -3,8 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define NUM_THREADS 4
-#define printError(text,error) fprintf(stderr, text": %s\n",strerror(error));
+#define THREADS_COUNT 4
+#define printError(text, error) fprintf(stderr, text": %s\n",strerror(error));
 
 typedef struct {
     int count;
@@ -24,7 +24,7 @@ void *printLines(void *args) {
 }
 
 int main() {
-    pthread_t thread[NUM_THREADS];
+    pthread_t thread[THREADS_COUNT];
     ThreadArgs_t threads_args[] = {
             {4, (char *[]) {
                     "T1 line 1/4",
@@ -51,20 +51,24 @@ int main() {
     };
 
     int error;
-    for (int i = 0; i < NUM_THREADS; i++) {
+    int working_threads_count = 0;
+    int exit_code = EXIT_SUCCESS;
+    for (int i = 0; i < THREADS_COUNT; i++) {
         error = pthread_create(&thread[i], NULL, printLines, &threads_args[i]);
         if (error) {
+            exit_code = EXIT_FAILURE;
             printError("Could not create thread", error);
-            return EXIT_FAILURE;
+            break;
         }
+        working_threads_count++;
     }
 
-    for (int i = 0; i < NUM_THREADS; i++) {
+    for (int i = 0; i < working_threads_count; i++) {
         error = pthread_join(thread[i], NULL);
         if (error) {
+            exit_code = EXIT_FAILURE;
             printError("Could not join thread", error);
-            return EXIT_FAILURE;
         }
     }
-    return EXIT_SUCCESS;
+    return exit_code;
 }
