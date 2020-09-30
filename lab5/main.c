@@ -8,7 +8,13 @@
 #define SLEEP_TIME 2
 #define TRUE 1
 #define FALSE 0
-#define printError(text, error) fprintf(stderr, text": %s\n",strerror(error));
+
+void printError(char *text, int error) {
+    if (NULL == text) {
+        return;
+    }
+    fprintf(stderr, "%s: %s\n", text, strerror(error));
+}
 
 void printEnded(void *args) {
     if (NULL == args) {
@@ -31,6 +37,10 @@ void *foreverPrintLines(void *args) {
         return NULL;
     }
     printed_many_lines = (int *) malloc(sizeof(int));
+    if (NULL == printed_many_lines) {
+        fprintf(stderr, "Could not allocate memory\n");
+        return NULL;
+    }
     *printed_many_lines = FALSE;
     pthread_cleanup_push(printEnded, printed_many_lines);
         error = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);

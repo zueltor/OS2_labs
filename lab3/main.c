@@ -4,7 +4,13 @@
 #include <stdlib.h>
 
 #define THREADS_COUNT 4
-#define printError(text, error) fprintf(stderr, text": %s\n",strerror(error));
+
+void printError(char *text, int error) {
+    if (NULL == text) {
+        return;
+    }
+    fprintf(stderr, "%s: %s\n", text, strerror(error));
+}
 
 typedef struct {
     int count;
