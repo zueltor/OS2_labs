@@ -62,18 +62,18 @@ void *foreverPrintLines(void *args) {
 
 int main() {
     pthread_t thread;
+    int return_value = EXIT_SUCCESS;
     int error = pthread_create(&thread, NULL, foreverPrintLines, NULL);
     if (error) {
         printError("Could not create thread", error);
         return EXIT_FAILURE;
     }
 
-    int return_value = EXIT_SUCCESS;
-    unsigned int unslept_amount = sleep(SLEEP_TIME);
-    if (unslept_amount > 0) {
-        fprintf(stderr, "Caught signal terminated sleep\n");
-        return_value = EXIT_FAILURE;
-    }
+    unsigned int unslept_time = SLEEP_TIME;
+    do {
+        unslept_time = sleep(unslept_time);
+    } while (unslept_time > 0);
+
     pthread_cancel(thread);
     error = pthread_join(thread, NULL);
     if (error) {
