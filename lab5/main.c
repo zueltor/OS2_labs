@@ -19,7 +19,7 @@ void printEnded(void *args) {
     if (NULL == args) {
         return;
     }
-    int many_lines_printed = *(int *) args;
+    bool many_lines_printed = *(bool *) args;
     printf("Child thread finished printing.\n");
     if (many_lines_printed) {
         printf("Number of lines printed: at least %d\n", LINES_COUNT_THRESHOLD);
@@ -28,20 +28,14 @@ void printEnded(void *args) {
 }
 
 void *foreverPrintLines(void *args) {
-    int *printed_many_lines;
+    bool printed_many_lines = false;
     bool NOT_CANCELLED = true;
     int error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
     if (error) {
         printError("Could not set cancel state", error);
         return NULL;
     }
-    printed_many_lines = (int *) malloc(sizeof(int));
-    if (NULL == printed_many_lines) {
-        fprintf(stderr, "Could not allocate memory\n");
-        return NULL;
-    }
-    *printed_many_lines = false;
-    pthread_cleanup_push(printEnded, printed_many_lines);
+    pthread_cleanup_push(printEnded, &printed_many_lines);
         error = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         if (error) {
             printError("Could not set cancel state", error);
@@ -51,7 +45,7 @@ void *foreverPrintLines(void *args) {
         while (NOT_CANCELLED) {
             printf("Line #%d\n", line_number++);
             if (line_number > LINES_COUNT_THRESHOLD) {
-                *printed_many_lines = true;
+                printed_many_lines = true;
             }
             pthread_testcancel();
         }
