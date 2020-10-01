@@ -73,7 +73,11 @@ int main() {
         unslept_time = sleep(unslept_time);
     } while (unslept_time > 0);
 
-    pthread_cancel(thread);
+    error = pthread_cancel(thread);
+    if (error) {
+        printError("Could not cancel thread", error);
+        return_value = EXIT_FAILURE;
+    }
     error = pthread_join(thread, NULL);
     if (error) {
         printError("Could not join thread", error);
