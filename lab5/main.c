@@ -3,11 +3,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #define LINES_COUNT_THRESHOLD 1000
 #define SLEEP_TIME 2
-#define TRUE 1
-#define FALSE 0
 
 void printError(char *text, int error) {
     if (NULL == text) {
@@ -30,7 +29,7 @@ void printEnded(void *args) {
 
 void *foreverPrintLines(void *args) {
     int *printed_many_lines;
-    int NOT_CANCELLED = 1;
+    bool NOT_CANCELLED = true;
     int error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
     if (error) {
         printError("Could not set cancel state", error);
@@ -41,7 +40,7 @@ void *foreverPrintLines(void *args) {
         fprintf(stderr, "Could not allocate memory\n");
         return NULL;
     }
-    *printed_many_lines = FALSE;
+    *printed_many_lines = false;
     pthread_cleanup_push(printEnded, printed_many_lines);
         error = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         if (error) {
@@ -52,11 +51,11 @@ void *foreverPrintLines(void *args) {
         while (NOT_CANCELLED) {
             printf("Line #%d\n", line_number++);
             if (line_number > LINES_COUNT_THRESHOLD) {
-                *printed_many_lines = TRUE;
+                *printed_many_lines = true;
             }
             pthread_testcancel();
         }
-    pthread_cleanup_pop(TRUE);
+    pthread_cleanup_pop(true);
     return NULL;
 }
 
