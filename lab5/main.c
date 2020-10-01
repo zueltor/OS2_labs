@@ -30,24 +30,14 @@ void printEnded(void *args) {
 void *foreverPrintLines(void *args) {
     bool printed_many_lines = false;
     bool NOT_CANCELLED = true;
-    int error = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-    if (error) {
-        printError("Could not set cancel state", error);
-        return NULL;
-    }
     pthread_cleanup_push(printEnded, &printed_many_lines);
-        error = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-        if (error) {
-            printError("Could not set cancel state", error);
-            pthread_exit(NULL);
-        }
         int line_number = 1;
         while (NOT_CANCELLED) {
-            printf("Line #%d\n", line_number++);
-            if (line_number > LINES_COUNT_THRESHOLD) {
-                printed_many_lines = true;
+            for (int i = 0; i < LINES_COUNT_THRESHOLD; i++) {
+                printf("Line #%d\n", line_number++);
+                pthread_testcancel();
             }
-            pthread_testcancel();
+            printed_many_lines = true;
         }
     pthread_cleanup_pop(true);
     return NULL;
