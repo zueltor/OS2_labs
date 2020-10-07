@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#define LINES_COUNT_THRESHOLD 1000
+#define LINES_COUNT_THRESHOLD 10000
 #define SLEEP_TIME 2
 
 void printError(char *text, int error) {
@@ -24,7 +24,6 @@ void printEnded(void *args) {
     if (many_lines_printed) {
         printf("Number of lines printed: at least %d\n", LINES_COUNT_THRESHOLD);
     }
-    free(args);
 }
 
 void *foreverPrintLines(void *args) {
@@ -62,6 +61,7 @@ int main() {
         printError("Could not cancel thread", error);
         return_value = EXIT_FAILURE;
     }
+
     error = pthread_join(thread, NULL);
     if (error) {
         printError("Could not join thread", error);

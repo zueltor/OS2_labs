@@ -2,13 +2,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <signal.h>
 #include <math.h>
+#include <stdbool.h>
 
-#define ITERATIONS_COUNT 200000000
+#define ITERATIONS_COUNT 2000000
 #define NO_ERROR_CODE 0
 #define MAX_THREADS_COUNT 1000
 #define ARGUMENTS_COUNT 2
 #define THREADS_COUNT_ARGUMENT 1
+
+sig_atomic_t time_to_stop = false;
+
+typedef void (*sighandler)(int);
 
 typedef struct {
     int start;
@@ -70,13 +76,26 @@ void *calculateChunk(void *args) {
     double value = 0;
     int end = chunk->end;
     int start = chunk->start;
+    pthread_barrier_t *barrier_p = chunk->barrier_p;
 
-    for (int i = start; i < end; i++) {
-        value += 1.0 / (i * 4.0 + 1.0);
-        value -= 1.0 / (i * 4.0 + 3.0);
+    while (!time_to_stop) {
+        for (int i = start; i < end; i++) {
+            value += 1.0 / (i * 4.0 + 1.0);
+            value -= 1.0 / (i * 4.0 + 3.0);
+        }
+        start += ITERATIONS_COUNT;
+        end += ITERATIONS_COUNT;
+        pthread_barrier_wait(barrier_p);
     }
     chunk->value = value;
     return &(chunk->value);
+}
+
+void signalHandler(int signal) {
+    if (signal != SIGINT) {
+        printf("Handled unknown signal\n");
+    }
+    time_to_stop = true;
 }
 
 int main(int argc, char **argv) {
@@ -103,12 +122,15 @@ int main(int argc, char **argv) {
 
     pthread_t threads[threads_count];
     Chunk chunks[threads_count];
+    pthread_barrier_t barrier;
+    pthread_barrier_init(&barrier, NULL, threads_count);
 
     //initialize chunks
     for (int i = 0; i < threads_count; i++) {
         chunks[i].start = getChunkStart(i, threads_count, ITERATIONS_COUNT);
         chunks[i].end = getChunkEnd(i, threads_count, ITERATIONS_COUNT);
         chunks[i].value = 0.0;
+        chunks[i].barrier_p = &barrier;
     }
 
     //create threads
@@ -121,6 +143,14 @@ int main(int argc, char **argv) {
             break;
         }
         working_threads_count++;
+    }
+
+    //setting signal handler
+    sighandler prevHandler = signal(SIGINT, signalHandler);
+    if (prevHandler == SIG_ERR) {
+        perror("Could not set signal handler");
+        return_value = EXIT_FAILURE;
+        time_to_stop = true;
     }
 
     //collect values
