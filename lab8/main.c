@@ -6,19 +6,22 @@
 #include <math.h>
 #include <stdbool.h>
 
-#define ITERATIONS_COUNT 2000000
+#define ITERATIONS_CHUNK_COUNT 2882880
 #define NO_ERROR_CODE 0
 #define MAX_THREADS_COUNT 1000
 #define ARGUMENTS_COUNT 2
 #define THREADS_COUNT_ARGUMENT 1
+#define NO_STOP_SIGNAL 1
+#define FIRST_THREAD (start % ITERATIONS_CHUNK_COUNT == 0)
+#define NO_ERROR 0
 
-sig_atomic_t time_to_stop = false;
+volatile sig_atomic_t stop_signal = false;
 
-typedef void (*sighandler)(int);
+typedef void (*signalHandler)(int);
 
 typedef struct {
-    int start;
-    int end;
+    unsigned start;
+    unsigned end;
     double value;
     pthread_barrier_t *barrier_p;
 } Chunk;
@@ -49,18 +52,18 @@ int getNumber(int *number, char *number_buffer) {
     return EXIT_SUCCESS;
 }
 
-int getChunkSize(int count_chunks, int count_elements) {
+unsigned getChunkSize(unsigned count_chunks, unsigned count_elements) {
     return (count_elements + count_chunks - 1) / count_chunks;
 }
 
-int getChunkStart(int chunk, int count_chunks, int count_elements) {
-    int chunk_size = getChunkSize(count_chunks, count_elements);
+unsigned getChunkStart(unsigned chunk, unsigned count_chunks, unsigned count_elements) {
+    unsigned chunk_size = getChunkSize(count_chunks, count_elements);
     return chunk * chunk_size;
 }
 
-int getChunkEnd(int chunk, int count_chunks, int count_elements) {
-    int chunk_size = getChunkSize(count_chunks, count_elements);
-    int end = (chunk + 1) * chunk_size;
+unsigned getChunkEnd(unsigned chunk, unsigned count_chunks, unsigned count_elements) {
+    unsigned chunk_size = getChunkSize(count_chunks, count_elements);
+    unsigned end = (chunk + 1) * chunk_size;
     if (end > count_elements) {
         return count_elements;
     } else {
@@ -72,30 +75,59 @@ void *calculateChunk(void *args) {
     if (NULL == args) {
         return NULL;
     }
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &mask, NULL);
     Chunk *chunk = (Chunk *) args;
     double value = 0;
-    int end = chunk->end;
-    int start = chunk->start;
+    unsigned long long end = chunk->end;
+    unsigned long long prev_end;
+    unsigned long long start = chunk->start;
+    int error;
+    static bool stop_calculating = false;
     pthread_barrier_t *barrier_p = chunk->barrier_p;
 
-    while (!time_to_stop) {
-        for (int i = start; i < end; i++) {
+    while (NO_STOP_SIGNAL) {
+        for (unsigned long long i = start; i < end; i++) {
             value += 1.0 / (i * 4.0 + 1.0);
             value -= 1.0 / (i * 4.0 + 3.0);
         }
-        start += ITERATIONS_COUNT;
-        end += ITERATIONS_COUNT;
-        pthread_barrier_wait(barrier_p);
+        prev_end = end;
+        start += ITERATIONS_CHUNK_COUNT;
+        end += ITERATIONS_CHUNK_COUNT;
+        if (prev_end > end) {
+            printf("Overflow occurred\n");
+            stop_calculating = true;
+        }
+        if (FIRST_THREAD) {
+            if (stop_signal) {
+                stop_calculating = true;
+            }
+        }
+        error = pthread_barrier_wait(barrier_p);
+        if (PTHREAD_BARRIER_SERIAL_THREAD != error && NO_ERROR != error) {
+            printError("Barrier1 wait error", error);
+            exit(0);
+        }
+        if (stop_calculating) {
+            break;
+        }
+        error = pthread_barrier_wait(barrier_p);
+        if (PTHREAD_BARRIER_SERIAL_THREAD != error && NO_ERROR != error) {
+            printError("Barrier2 wait error", error);
+            exit(0);
+        }
     }
     chunk->value = value;
     return &(chunk->value);
 }
 
-void signalHandler(int signal) {
+void stopExecution(int signal) {
     if (signal != SIGINT) {
         printf("Handled unknown signal\n");
     }
-    time_to_stop = true;
+    stop_signal = true;
 }
 
 int main(int argc, char **argv) {
@@ -120,15 +152,30 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    pthread_barrier_t barrier;
+    error = pthread_barrier_init(&barrier, NULL, threads_count);
+    if (error) {
+        printError("Could not initialize barrier", error);
+        return EXIT_FAILURE;
+    }
+
+    //setting signal handler
+    signalHandler prevHandler = signal(SIGINT, stopExecution);
+    if (prevHandler == SIG_ERR) {
+        perror("Could not set signal handler");
+        error = pthread_barrier_destroy(&barrier);
+        if (error) {
+            printError("Could not destroy barrier", error);
+        }
+        return EXIT_FAILURE;
+    }
     pthread_t threads[threads_count];
     Chunk chunks[threads_count];
-    pthread_barrier_t barrier;
-    pthread_barrier_init(&barrier, NULL, threads_count);
 
     //initialize chunks
     for (int i = 0; i < threads_count; i++) {
-        chunks[i].start = getChunkStart(i, threads_count, ITERATIONS_COUNT);
-        chunks[i].end = getChunkEnd(i, threads_count, ITERATIONS_COUNT);
+        chunks[i].start = getChunkStart(i, threads_count, ITERATIONS_CHUNK_COUNT);
+        chunks[i].end = getChunkEnd(i, threads_count, ITERATIONS_CHUNK_COUNT);
         chunks[i].value = 0.0;
         chunks[i].barrier_p = &barrier;
     }
@@ -143,14 +190,6 @@ int main(int argc, char **argv) {
             break;
         }
         working_threads_count++;
-    }
-
-    //setting signal handler
-    sighandler prevHandler = signal(SIGINT, signalHandler);
-    if (prevHandler == SIG_ERR) {
-        perror("Could not set signal handler");
-        return_value = EXIT_FAILURE;
-        time_to_stop = true;
     }
 
     //collect values
@@ -172,5 +211,10 @@ int main(int argc, char **argv) {
     pi = pi * 4.0;
     printf("\nCalculated pi: \t%.15g \nReal pi: \t%.15g\n", pi, M_PI);
 
+    error = pthread_barrier_destroy(&barrier);
+    if (error) {
+        return_value = EXIT_FAILURE;
+        printError("Could not destroy barrier", error);
+    }
     return return_value;
 }
