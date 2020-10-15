@@ -75,17 +75,30 @@ void *calculateChunk(void *args) {
     if (NULL == args) {
         return NULL;
     }
+    static bool stop_calculating = false;
+    int error;
     sigset_t mask;
-    sigemptyset(&mask);
-    sigaddset(&mask, SIGINT);
-    pthread_sigmask(SIG_BLOCK, &mask, NULL);
+    error = sigemptyset(&mask);
+    if (error) {
+        printError("Could not sig empty set", error);
+        stop_calculating = true;
+    }
+    error = sigaddset(&mask, SIGINT);
+    if (error) {
+        printError("Could not sig empty set", error);
+        stop_calculating = true;
+    }
+    error = pthread_sigmask(SIG_BLOCK, &mask, NULL);
+    if (error) {
+        printError("Could not sig empty set", error);
+        stop_calculating = true;
+    }
     Chunk *chunk = (Chunk *) args;
     double value = 0;
     unsigned long long end = chunk->end;
-    unsigned long long prev_end;
+    unsigned long prev_end;
     unsigned long long start = chunk->start;
-    int error;
-    static bool stop_calculating = false;
+
     pthread_barrier_t *barrier_p = chunk->barrier_p;
 
     while (NO_STOP_SIGNAL) {
@@ -108,7 +121,7 @@ void *calculateChunk(void *args) {
         error = pthread_barrier_wait(barrier_p);
         if (PTHREAD_BARRIER_SERIAL_THREAD != error && NO_ERROR != error) {
             printError("Barrier1 wait error", error);
-            exit(0);
+            exit(EXIT_FAILURE);
         }
         if (stop_calculating) {
             break;
@@ -116,7 +129,7 @@ void *calculateChunk(void *args) {
         error = pthread_barrier_wait(barrier_p);
         if (PTHREAD_BARRIER_SERIAL_THREAD != error && NO_ERROR != error) {
             printError("Barrier2 wait error", error);
-            exit(0);
+            exit(EXIT_FAILURE);
         }
     }
     chunk->value = value;
