@@ -28,8 +28,8 @@ void *parentPrintLines(void *args) {
     }
     Thread_parameters *parameters = (Thread_parameters *) args;
     char *name = parameters->thread_name;
-    int can_print = parameters->can_print;
-    int cannot_print = parameters->cannot_print;
+    bool can_print = parameters->can_print;
+    bool cannot_print = parameters->cannot_print;
     pthread_mutex_t *permission_lock = parameters->permission_lock;
     bool permission = true;
 
