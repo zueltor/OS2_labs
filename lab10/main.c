@@ -31,17 +31,26 @@ void *parentPrintLines(void *args) {
     bool can_print = parameters->can_print;
     bool cannot_print = parameters->cannot_print;
     pthread_mutex_t *permission_lock = parameters->permission_lock;
-    bool permission = true;
+    static bool permission = true;
+    int error;
 
     int i = 1;
     while (i <= LINES_COUNT) {
-        pthread_mutex_lock(permission_lock);
+        error = pthread_mutex_lock(permission_lock);
+        if (error) {
+            printError("Could not lock mutex", error);
+            exit(EXIT_FAILURE);
+        }
         if (permission == can_print) {
             printf("%s thread: line %d\n", name, i);
             i++;
             permission = cannot_print;
         }
-        pthread_mutex_unlock(permission_lock);
+        error = pthread_mutex_unlock(permission_lock);
+        if (error) {
+            printError("Could not unlock mutex", error);
+            exit(EXIT_FAILURE);
+        }
     }
     return NULL;
 }
@@ -65,6 +74,10 @@ int main() {
         return EXIT_FAILURE;
     }
     parentPrintLines(&parameters[PARENT]);
-    pthread_exit(NULL);
+    error = pthread_join(thread, NULL);
+    if (error) {
+        printError("Could not join thread", error);
+        return EXIT_FAILURE;
+    }
     return EXIT_SUCCESS;
 }

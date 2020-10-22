@@ -8,7 +8,7 @@
 
 #define ITERATIONS_CHUNK_COUNT 2882880
 #define NO_ERROR_CODE 0
-#define MAX_THREADS_COUNT 1000
+#define MAX_THREADS_COUNT 10000
 #define ARGUMENTS_COUNT 2
 #define THREADS_COUNT_ARGUMENT 1
 #define NO_STOP_SIGNAL 1
@@ -24,6 +24,7 @@ typedef struct {
     unsigned end;
     double value;
     pthread_barrier_t *barrier;
+    pthread_mutex_t *start_lock;
 } Chunk;
 
 void printError(char *text, int error) {
@@ -75,6 +76,7 @@ void *calculateChunk(void *args) {
     if (NULL == args) {
         return NULL;
     }
+
     static bool stop_calculating = false;
     int error;
     sigset_t mask;
@@ -94,6 +96,16 @@ void *calculateChunk(void *args) {
         stop_calculating = true;
     }
     Chunk *chunk = (Chunk *) args;
+    error = pthread_mutex_lock(chunk->start_lock);
+    if (error) {
+        printError("Calculating thread mutex lock error", error);
+        exit(EXIT_FAILURE);
+    }
+    error = pthread_mutex_unlock(chunk->start_lock);
+    if (error) {
+        printError("Calculating thread mutex unlock error", error);
+        exit(EXIT_FAILURE);
+    }
     double value = 0;
     unsigned long long end = chunk->end;
     unsigned long prev_end;
@@ -118,6 +130,7 @@ void *calculateChunk(void *args) {
                 stop_calculating = true;
             }
         }
+
         error = pthread_barrier_wait(barrier);
         if (PTHREAD_BARRIER_SERIAL_THREAD != error && NO_ERROR != error) {
             printError("Barrier1 wait error", error);
@@ -165,32 +178,26 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    pthread_barrier_t barrier;
-    error = pthread_barrier_init(&barrier, NULL, threads_count);
-    if (error) {
-        printError("Could not initialize barrier", error);
-        return EXIT_FAILURE;
-    }
-
     //setting signal handler
     signalHandler prevHandler = signal(SIGINT, stopExecution);
     if (prevHandler == SIG_ERR) {
         perror("Could not set signal handler");
-        error = pthread_barrier_destroy(&barrier);
-        if (error) {
-            printError("Could not destroy barrier", error);
-        }
         return EXIT_FAILURE;
     }
     pthread_t threads[threads_count];
     Chunk chunks[threads_count];
+    pthread_mutex_t start_lock = PTHREAD_MUTEX_INITIALIZER;
+
 
     //initialize chunks
     for (int i = 0; i < threads_count; i++) {
-        chunks[i].start = getChunkStart(i, threads_count, ITERATIONS_CHUNK_COUNT);
-        chunks[i].end = getChunkEnd(i, threads_count, ITERATIONS_CHUNK_COUNT);
-        chunks[i].value = 0.0;
-        chunks[i].barrier = &barrier;
+        chunks[i].start_lock = &start_lock;
+    }
+
+    error = pthread_mutex_lock(&start_lock);
+    if (error) {
+        printError("Main thread mutex lock error", error);
+        return EXIT_FAILURE;
     }
 
     //create threads
@@ -203,6 +210,27 @@ int main(int argc, char **argv) {
             break;
         }
         working_threads_count++;
+    }
+
+    pthread_barrier_t barrier;
+    printf("%d working threads\n",working_threads_count);
+    error = pthread_barrier_init(&barrier, NULL, working_threads_count);
+    if (error) {
+        printError("Could not initialize barrier", error);
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < working_threads_count; i++) {
+        chunks[i].start = getChunkStart(i, working_threads_count, ITERATIONS_CHUNK_COUNT);
+        chunks[i].end = getChunkEnd(i, working_threads_count, ITERATIONS_CHUNK_COUNT);
+        chunks[i].value = 0.0;
+        chunks[i].barrier = &barrier;
+    }
+
+    error = pthread_mutex_unlock(&start_lock); //
+    if (error) {
+        printError("Main thread mutex unlock error", error);
+        exit(EXIT_FAILURE);
     }
 
     //collect values
