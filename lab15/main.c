@@ -14,9 +14,6 @@
 #include<fcntl.h>
 
 #define LINES_COUNT 10
-#define PARENT 0
-#define CHILD 1
-#define THREADS_COUNT 2
 #define UNLOCKED_SEMAPHORE 1
 #define LOCKED_SEMAPHORE 0
 #define CHILD_ID 0
@@ -37,14 +34,11 @@ void printError(char *text, int error) {
 
 int closeSemaphore(sem_t *sem_key, const char *sem_name) {
     int return_value = EXIT_SUCCESS;
-    if (sem_key == NULL || sem_name == NULL) {
-        return EXIT_SUCCESS;
-    }
-    if (ERROR == sem_close(sem_key)) {
+    if (sem_key != NULL && ERROR == sem_close(sem_key)) {
         perror("sem_close");
         return_value = EXIT_FAILURE;
     }
-    if (ERROR == sem_unlink(sem_name)) {
+    if (sem_name != NULL && ERROR == sem_unlink(sem_name)) {
         perror("sem_unlink");
         return_value = EXIT_FAILURE;
     }
@@ -82,20 +76,18 @@ int printLines(void *args) {
 
 int main() {
     Thread_parameters parameters;
-    static const char *child_sem_name = "/sem1";
-    static const char *parent_sem_name = "/sem2";
-    static sem_t *sem1, *sem2;
+    char *child_sem_name = "/unique_sem_name_1";
+    char *parent_sem_name = "/unique_sem_name_2";
+    sem_t *sem1, *sem2;
     int error;
     sem1 = sem_open(child_sem_name, O_CREAT | O_EXCL,
                     S_IRUSR | S_IWUSR, UNLOCKED_SEMAPHORE);
-
     if (SEM_FAILED == sem1) {
         perror("Failed to open semaphore");
         return EXIT_FAILURE;
     }
     sem2 = sem_open(parent_sem_name, O_CREAT | O_EXCL,
                     S_IRUSR | S_IWUSR, LOCKED_SEMAPHORE);
-
     if (SEM_FAILED == sem2) {
         perror("Failed to open semaphore");
         return EXIT_FAILURE;
@@ -118,36 +110,40 @@ int main() {
     }
 
     return_value = printLines(&parameters);
-
     if (return_value == EXIT_FAILURE) {
         if (child_pid == CHILD_ID) {
             pid_t ppid = 0;
             ppid = getppid();
             if (ERROR == ppid) {
-                perror("getppid");
+                perror("Failed to get parent process id");
             } else if (ERROR == kill(ppid, SIGKILL)) {
-                perror("kill");
+                perror("Failed to kill parent process");
             }
         } else {
             if (ERROR == kill(child_pid, SIGKILL)) {
-                perror("kill");
+                perror("Failed to kill child process");
             }
+        }
+    }
+
+    if (child_pid == CHILD_ID) {
+        if (EXIT_FAILURE == closeSemaphore(sem1, NULL)) {
+            return_value = EXIT_FAILURE;
+        }
+        if (EXIT_FAILURE == closeSemaphore(sem2, NULL)) {
+            return_value = EXIT_FAILURE;
         }
     } else {
-        if (child_pid != CHILD_ID) {
-            error=wait(NULL);
-            if(error){
-                return_value=EXIT_FAILURE;
-            }
+        error = wait(NULL);
+        if (error) {
+            return_value = EXIT_FAILURE;
+        }
+        if (EXIT_FAILURE == closeSemaphore(sem1, child_sem_name)) {
+            return_value = EXIT_FAILURE;
+        }
+        if (EXIT_FAILURE == closeSemaphore(sem2, parent_sem_name)) {
+            return_value = EXIT_FAILURE;
         }
     }
-
-    if (EXIT_FAILURE == closeSemaphore(sem1, child_sem_name)) {
-        return_value = EXIT_FAILURE;
-    }
-    if (EXIT_FAILURE == closeSemaphore(sem2, parent_sem_name)) {
-        return_value = EXIT_FAILURE;
-    }
-
     return return_value;
 }
