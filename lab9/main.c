@@ -12,13 +12,13 @@
 #define NANOSECONDS_IN_SECOND 1000000000ll
 #define RANDOM_VARIANCE_MULTIPLIER 3
 #define FOOD_LEFT_ON_TABLE 1
-//#define SLOWPOKE 1
 
 typedef struct {
     int id;
     pthread_mutex_t *fork1;
     pthread_mutex_t *fork2;
     pthread_mutex_t *foodlock;
+    int *food;
 } Philosopher_parameters;
 
 int min(int a, int b) {
@@ -86,10 +86,6 @@ void doSleep(long long sleep_time_nanoseconds) {
 void think(int id) {
     double variance = (double) rand() / RAND_MAX * (THINK_TIME * RANDOM_VARIANCE_MULTIPLIER);
     long long think_time = (long long) (THINK_TIME + variance) * (id + 1);
-    printf("%d think %llu\n",id,think_time);
-    /*if (id == SLOWPOKE) {
-        think_time *= 30;
-    }*/
     doSleep(think_time);
 }
 
@@ -97,9 +93,6 @@ void eat(int id) {
     printf("Philosopher %d: eating.\n", id);
     double variance = (double) rand() / RAND_MAX * (EAT_TIME * RANDOM_VARIANCE_MULTIPLIER);
     long long eat_time = (long long) (EAT_TIME + variance) * (id + 1);
-    /*if (id == SLOWPOKE) {
-        eat_time *= 8;
-    }*/
     doSleep(eat_time);
 }
 
@@ -108,7 +101,6 @@ int takeFood(Philosopher_parameters *philosopher_parameters) {
         fprintf(stderr, "Parameters cannot be null\n");
         return 0;
     }
-    static int food = FOOD + 1;
     int myfood;
     int error;
     error = pthread_mutex_lock(philosopher_parameters->foodlock);
@@ -116,10 +108,10 @@ int takeFood(Philosopher_parameters *philosopher_parameters) {
         printError("Mutex lock error", error);
         exit(EXIT_FAILURE);
     }
-    if (food > 0) {
-        food--;
+    if (*(philosopher_parameters->food) > 0) {
+        (*(philosopher_parameters->food))--;
     }
-    myfood = food;
+    myfood = *(philosopher_parameters->food);
     error = pthread_mutex_unlock(philosopher_parameters->foodlock);
     if (error) {
         printError("Mutex unlock error", error);
@@ -133,7 +125,7 @@ void *startDinner(void *args) {
     int food_left;
     Philosopher_parameters *philosopher_parameters = (Philosopher_parameters *) args;
     id = philosopher_parameters->id;
-    static __thread int count = 0;
+    int count = 0;
     printf("Philosopher %d sitting down to dinner.\n", id);
 
     while (FOOD_LEFT_ON_TABLE) {
@@ -160,6 +152,7 @@ int main(int argn, char **argv) {
     pthread_mutex_t foodlock = PTHREAD_MUTEX_INITIALIZER;
     pthread_t philosophers[PHILOSOPHERS_COUNT];
     Philosopher_parameters philosopher_parameters[PHILOSOPHERS_COUNT];
+    int food=FOOD +1;
 
     for (int i = 0; i < PHILOSOPHERS_COUNT; i++) {
         pthread_mutex_t mutex_intializer = PTHREAD_MUTEX_INITIALIZER;
@@ -172,6 +165,7 @@ int main(int argn, char **argv) {
         philosopher_parameters[index].fork1 = &forks[min(index, next_index)];
         philosopher_parameters[index].fork2 = &forks[max(index, next_index)];
         philosopher_parameters[index].foodlock = &foodlock;
+        philosopher_parameters[index].food=&food;
     }
 
     int philosophers_count = 0;
