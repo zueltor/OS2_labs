@@ -20,6 +20,7 @@ typedef struct {
     bool parent;
     sem_t *sem1;
     sem_t *sem2;
+    pthread_t *other_thread;
 } Thread_parameters;
 
 void printError(char *text, int error) {
@@ -44,12 +45,14 @@ void *printLines(void *args) {
         error = sem_wait(sem1);
         if (error) {
             printError("Could not lock semaphore", error);
+            pthread_cancel(*(parameters->other_thread));
             return FAILURE;
         }
         printf("%s thread: line %d\n", name, i);
         error = sem_post(sem2);
         if (error) {
             printError("Could not unlock semaphore", error);
+            pthread_cancel(*(parameters->other_thread));
             return FAILURE;
         }
     }
@@ -57,8 +60,38 @@ void *printLines(void *args) {
     return NULL;
 }
 
+void clearResources(void *args) {
+    int error;
+    Thread_parameters *parameters = (Thread_parameters *) args;
+    if (parameters == NULL) {
+        return;
+    }
+    error = pthread_join(*(parameters->other_thread), NULL);
+    if (error) {
+        printError("Could not join thread", error);
+    }
+    error = sem_destroy(parameters->sem1);
+    if (error) {
+        printError("Could not destroy semaphore", error);
+    }
+    error = sem_destroy(parameters->sem2);
+    if (error) {
+        printError("Could not destroy semaphore", error);
+    }
+}
+
+void *parentPrintLines(void *args) {
+    Thread_parameters *parameters = (Thread_parameters *) args;
+    void *return_value;
+    pthread_cleanup_push(clearResources, args);
+        return_value = printLines(parameters);
+    pthread_cleanup_pop(true);
+    return return_value;
+}
+
 int main() {
-    pthread_t thread;
+    pthread_t child_thread;
+    pthread_t main_thread = pthread_self();
     Thread_parameters parameters[THREADS_COUNT];
     sem_t sem1, sem2;
     int error;
@@ -76,28 +109,21 @@ int main() {
     parameters[PARENT].sem1 = &sem1;
     parameters[PARENT].sem2 = &sem2;
     parameters[PARENT].parent = true;
+    parameters[PARENT].other_thread = &child_thread;
     parameters[CHILD].sem1 = &sem2;
     parameters[CHILD].sem2 = &sem1;
     parameters[CHILD].parent = false;
+    parameters[CHILD].other_thread = &main_thread;
 
-    error = pthread_create(&thread, NULL, printLines, &parameters[CHILD]);
+    error = pthread_create(&child_thread, NULL, printLines, &parameters[CHILD]);
     if (error) {
-        printError("Could not create thread", error);
+        printError("Could not create child_thread", error);
+        clearResources(&parameters[PARENT]);
         return EXIT_FAILURE;
     }
-
     void *thread_return_value;
     int return_value = EXIT_SUCCESS;
-    thread_return_value = printLines(&parameters[PARENT]);
-    if (thread_return_value == FAILURE) {
-        return_value = EXIT_FAILURE;
-    }
-
-    error = pthread_join(thread, &thread_return_value);
-    if (error) {
-        printError("Could not join thread", error);
-        return EXIT_FAILURE;
-    }
+    thread_return_value = parentPrintLines(&parameters[PARENT]);
     if (thread_return_value == FAILURE) {
         return_value = EXIT_FAILURE;
     }

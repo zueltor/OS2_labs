@@ -63,7 +63,7 @@ int printLines(void *args) {
             printError("Could not lock semaphore", error);
             return EXIT_FAILURE;
         }
-        printf("%s thread: line %d\n", name, i);
+        printf("%s process: line %d\n", name, i);
         error = sem_post(sem2);
         if (error) {
             printError("Could not unlock semaphore", error);

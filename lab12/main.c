@@ -14,6 +14,7 @@
 
 typedef struct {
     bool parent;
+    pthread_t *other_thread;
     pthread_mutex_t *mutex;
     pthread_cond_t *condition;
     bool *current_turn;
@@ -43,6 +44,7 @@ void *printLines(void *args) {
     error = pthread_mutex_lock(mutex);
     if (error) {
         printError("Could not lock mutex", error);
+        pthread_cancel(*(parameters->other_thread));
         return FAILURE;
     }
     for (int i = 1; i <= LINES_COUNT; i++) {
@@ -50,14 +52,16 @@ void *printLines(void *args) {
             error = pthread_cond_wait(cond, mutex);
             if (error) {
                 printError("Could not block on condition variable", error);
+                pthread_cancel(*(parameters->other_thread));
                 return FAILURE;
             }
         }
-        *current_turn = !(*current_turn);
+        *current_turn = !my_turn;
         printf("%s thread: line %d\n", name, i);
         error = pthread_cond_signal(cond);
         if (error) {
             printError("Failed to unblock other thread", error);
+            pthread_cancel(*(parameters->other_thread));
             return FAILURE;
         }
     }
@@ -65,35 +69,47 @@ void *printLines(void *args) {
     error = pthread_mutex_unlock(mutex);
     if (error) {
         printError("Could not unlock mutex", error);
+        pthread_cancel(*(parameters->other_thread));
         return FAILURE;
     }
     return NULL;
 }
 
-int clearResources(pthread_mutex_t *mutex, pthread_cond_t *condition) {
+void clearResources(void *args) {
     int error;
-    int return_value = EXIT_SUCCESS;
-    if (mutex != NULL) {
-        error = pthread_mutex_destroy(mutex);
-        if (error) {
-            return_value = EXIT_FAILURE;
-        }
+    Thread_parameters *parameters = (Thread_parameters *) args;
+    if (parameters == NULL) {
+        return;
     }
+    pthread_mutex_unlock(parameters->mutex);
+    error = pthread_join(*(parameters->other_thread), NULL);
+    if (error) {
+        printError("Could not join thread", error);
+    }
+    error = pthread_mutex_destroy(parameters->mutex);
+    if (error) {
+        printError("Could not destroy mutex", error);
+    }
+    error = pthread_cond_destroy(parameters->condition);
+    if (error) {
+        printError("Could not destroy condition variable", error);
+    }
+}
 
-    if (condition != NULL) {
-        error = pthread_cond_destroy(condition);
-        if (error) {
-            return_value = EXIT_FAILURE;
-        }
-    }
+void *parentPrintLines(void *args) {
+    Thread_parameters *parameters = (Thread_parameters *) args;
+    void *return_value;
+    pthread_cleanup_push(clearResources, args);
+        return_value = printLines(parameters);
+    pthread_cleanup_pop(true);
     return return_value;
 }
 
 int main() {
-    pthread_t thread;
+    pthread_t child_thread;
+    pthread_t main_thread = pthread_self();
     Thread_parameters parameters[THREADS_COUNT];
     pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-
     pthread_cond_t condition = PTHREAD_COND_INITIALIZER;
     int error;
 
@@ -101,35 +117,23 @@ int main() {
     parameters[PARENT].condition = &condition;
     parameters[PARENT].current_turn = &parent_turn;
     parameters[PARENT].parent = true;
+    parameters[PARENT].other_thread = &child_thread;
     parameters[CHILD].mutex = &mutex;
     parameters[CHILD].condition = &condition;
     parameters[CHILD].current_turn = &parent_turn;
     parameters[CHILD].parent = false;
+    parameters[CHILD].other_thread = &main_thread;
 
-    error = pthread_create(&thread, NULL, printLines, &parameters[CHILD]);
+    error = pthread_create(&child_thread, NULL, printLines, &parameters[CHILD]);
     if (error) {
-        printError("Could not create thread", error);
-        clearResources(&mutex, &condition);
+        printError("Could not create child_thread", error);
+        clearResources(&parameters[PARENT]);
         return EXIT_FAILURE;
     }
     void *thread_return_value;
     int return_value = EXIT_SUCCESS;
-    thread_return_value = printLines(&parameters[PARENT]);
+    thread_return_value = parentPrintLines(&parameters[PARENT]);
     if (thread_return_value == FAILURE) {
-        return_value = EXIT_FAILURE;
-    }
-
-    error = pthread_join(thread, &thread_return_value);
-    if (error) {
-        printError("Could not join thread", error);
-        clearResources(&mutex, &condition);
-        return EXIT_FAILURE;
-    }
-    if (thread_return_value == FAILURE) {
-        return_value = EXIT_FAILURE;
-    }
-    error = clearResources(&mutex, &condition);
-    if (error == EXIT_FAILURE) {
         return_value = EXIT_FAILURE;
     }
     return return_value;
