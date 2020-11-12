@@ -80,8 +80,8 @@ void stopExecution(int signal) {
 
 int main() {
     Thread_parameters parameters;
-    char *child_semaphore_name = "/unique_sem_name_1111111";
-    char *parent_semaphore_name = "/unique_sem_name_2222222";
+    char *child_semaphore_name = "/unique_child_semaphore_name";
+    char *parent_semaphore_name = "/unique_parent_semaphore_name";
     sem_t *parent_semaphore, *child_semaphore;
     int error;
     bool executionError = false;
@@ -102,6 +102,14 @@ int main() {
     pid_t child_pid;
     int return_value = EXIT_SUCCESS;
 
+    signalHandler prevHandler = signal(SIGINT, stopExecution);
+    if (prevHandler == SIG_ERR) {
+        closeSemaphore(parent_semaphore, parent_semaphore_name);
+        closeSemaphore(child_semaphore, child_semaphore_name);
+        perror("Could not set signal handler");
+        return EXIT_FAILURE;
+    }
+
     child_pid = fork();
     if (child_pid == ERROR) {
         perror("Failed to fork process");
@@ -110,26 +118,14 @@ int main() {
         parameters.wait_semaphore = child_semaphore;
         parameters.post_semaphore = parent_semaphore;
         parameters.parent = false;
-        signalHandler prevHandler = signal(SIGINT, stopExecution);
-        if (prevHandler == SIG_ERR) {
-            perror("Could not set signal handler");
-            executionError = true;
-        }
     } else {
         parameters.wait_semaphore = parent_semaphore;
         parameters.post_semaphore = child_semaphore;
         parameters.parent = true;
-        signalHandler prevHandler = signal(SIGINT, stopExecution);
-        if (prevHandler == SIG_ERR) {
-            perror("Could not set signal handler");
-            executionError = true;
-        }
     }
 
-    if (!executionError) {
-        return_value = printLines(&parameters);
-    }
-    if ((return_value == EXIT_FAILURE || executionError) && !signalReceived) {
+    return_value = printLines(&parameters);
+    if ((return_value == EXIT_FAILURE) && !signalReceived) {
         if (child_pid == CHILD_ID) {
             pid_t ppid = 0;
             ppid = getppid();
