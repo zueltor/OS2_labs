@@ -19,27 +19,24 @@
 #define CHILD_ID 0
 #define ERROR -1
 
+typedef void (*signalHandler)(int);
+
+int signalReceived = false;
+
 typedef struct {
     bool parent;
-    sem_t *sem1;
-    sem_t *sem2;
+    sem_t *wait_semaphore;
+    sem_t *post_semaphore;
 } Thread_parameters;
-
-void printError(char *text, int error) {
-    if (NULL == text) {
-        return;
-    }
-    fprintf(stderr, "%s: %s\n", text, strerror(error));
-}
 
 int closeSemaphore(sem_t *sem_key, const char *sem_name) {
     int return_value = EXIT_SUCCESS;
     if (sem_key != NULL && ERROR == sem_close(sem_key)) {
-        perror("sem_close");
+        perror("Failed to close semaphore");
         return_value = EXIT_FAILURE;
     }
     if (sem_name != NULL && ERROR == sem_unlink(sem_name)) {
-        perror("sem_unlink");
+        perror("Failed to unlink semaphore");
         return_value = EXIT_FAILURE;
     }
     return return_value;
@@ -54,83 +51,119 @@ int printLines(void *args) {
     int error;
     Thread_parameters *parameters = (Thread_parameters *) args;
     char *name = (parameters->parent == true) ? "Parent" : "Child";
-    sem_t *sem1 = parameters->sem1;
-    sem_t *sem2 = parameters->sem2;
+    sem_t *wait_semaphore = parameters->wait_semaphore;
+    sem_t *post_semaphore = parameters->post_semaphore;
 
-    for (int i = 1; i <= LINES_COUNT; i++) {
-        error = sem_wait(sem1);
+    for (int i = 1; i <= LINES_COUNT && !signalReceived; i++) {
+        error = sem_wait(wait_semaphore);
         if (error) {
-            printError("Could not lock semaphore", error);
+            perror("Could not lock semaphore");
             return EXIT_FAILURE;
         }
+#ifdef SLEEP
+        sleep(1);
+#endif
         printf("%s process: line %d\n", name, i);
-        error = sem_post(sem2);
+        error = sem_post(post_semaphore);
         if (error) {
-            printError("Could not unlock semaphore", error);
+            perror("Could not unlock semaphore");
             return EXIT_FAILURE;
         }
     }
 
-    return EXIT_SUCCESS;
+    return (signalReceived) ? EXIT_FAILURE : EXIT_SUCCESS;
+}
+
+void stopExecution(int signal) {
+    signalReceived = true;
 }
 
 int main() {
     Thread_parameters parameters;
-    char *child_sem_name = "/unique_sem_name_1";
-    char *parent_sem_name = "/unique_sem_name_2";
-    sem_t *sem1, *sem2;
+    char *child_semaphore_name = "/unique_sem_name_1111111";
+    char *parent_semaphore_name = "/unique_sem_name_2222222";
+    sem_t *parent_semaphore, *child_semaphore;
     int error;
-    sem1 = sem_open(child_sem_name, O_CREAT | O_EXCL,
-                    S_IRUSR | S_IWUSR, UNLOCKED_SEMAPHORE);
-    if (SEM_FAILED == sem1) {
+    bool executionError = false;
+    bool process_killed = false;
+    parent_semaphore = sem_open(child_semaphore_name, O_CREAT | O_EXCL,
+                                S_IRUSR | S_IWUSR, UNLOCKED_SEMAPHORE);
+    if (SEM_FAILED == parent_semaphore) {
         perror("Failed to open semaphore");
         return EXIT_FAILURE;
     }
-    sem2 = sem_open(parent_sem_name, O_CREAT | O_EXCL,
-                    S_IRUSR | S_IWUSR, LOCKED_SEMAPHORE);
-    if (SEM_FAILED == sem2) {
+    child_semaphore = sem_open(parent_semaphore_name, O_CREAT | O_EXCL,
+                               S_IRUSR | S_IWUSR, LOCKED_SEMAPHORE);
+    if (SEM_FAILED == child_semaphore) {
         perror("Failed to open semaphore");
+        closeSemaphore(parent_semaphore, parent_semaphore_name);
         return EXIT_FAILURE;
     }
     pid_t child_pid;
-    int return_value;
+    int return_value = EXIT_SUCCESS;
+
     child_pid = fork();
     if (child_pid == ERROR) {
         perror("Failed to fork process");
         return EXIT_FAILURE;
     } else if (child_pid == CHILD_ID) {
-        parameters.sem1 = sem2;
-        parameters.sem2 = sem1;
+        parameters.wait_semaphore = child_semaphore;
+        parameters.post_semaphore = parent_semaphore;
         parameters.parent = false;
-
+        signalHandler prevHandler = signal(SIGINT, stopExecution);
+        if (prevHandler == SIG_ERR) {
+            perror("Could not set signal handler");
+            executionError = true;
+        }
     } else {
-        parameters.sem1 = sem1;
-        parameters.sem2 = sem2;
+        parameters.wait_semaphore = parent_semaphore;
+        parameters.post_semaphore = child_semaphore;
         parameters.parent = true;
+        signalHandler prevHandler = signal(SIGINT, stopExecution);
+        if (prevHandler == SIG_ERR) {
+            perror("Could not set signal handler");
+            executionError = true;
+        }
     }
 
-    return_value = printLines(&parameters);
-    if (return_value == EXIT_FAILURE) {
+    if (!executionError) {
+        return_value = printLines(&parameters);
+    }
+    if ((return_value == EXIT_FAILURE || executionError) && !signalReceived) {
         if (child_pid == CHILD_ID) {
             pid_t ppid = 0;
             ppid = getppid();
+            printf("Sending kill to parent\n");
             if (ERROR == ppid) {
                 perror("Failed to get parent process id");
             } else if (ERROR == kill(ppid, SIGKILL)) {
                 perror("Failed to kill parent process");
+            } else {
+                process_killed = true;
             }
         } else {
+            printf("Sending kill to child\n");
             if (ERROR == kill(child_pid, SIGKILL)) {
                 perror("Failed to kill child process");
+            } else {
+                process_killed = true;
             }
         }
     }
-
+    if (process_killed) {
+        if (child_pid == CHILD_ID) {
+            printf("Parent died\n");
+        } else {
+            printf("Child died\n");
+        }
+    }
     if (child_pid == CHILD_ID) {
-        if (EXIT_FAILURE == closeSemaphore(sem1, NULL)) {
+        char *semaphore_name = (process_killed) ? parent_semaphore_name : NULL;
+        if (EXIT_FAILURE == closeSemaphore(parent_semaphore, semaphore_name)) {
             return_value = EXIT_FAILURE;
         }
-        if (EXIT_FAILURE == closeSemaphore(sem2, NULL)) {
+        semaphore_name = (process_killed) ? child_semaphore_name : NULL;
+        if (EXIT_FAILURE == closeSemaphore(child_semaphore, semaphore_name)) {
             return_value = EXIT_FAILURE;
         }
     } else {
@@ -138,12 +171,13 @@ int main() {
         if (error) {
             return_value = EXIT_FAILURE;
         }
-        if (EXIT_FAILURE == closeSemaphore(sem1, child_sem_name)) {
+        if (EXIT_FAILURE == closeSemaphore(parent_semaphore, child_semaphore_name)) {
             return_value = EXIT_FAILURE;
         }
-        if (EXIT_FAILURE == closeSemaphore(sem2, parent_sem_name)) {
+        if (EXIT_FAILURE == closeSemaphore(child_semaphore, parent_semaphore_name)) {
             return_value = EXIT_FAILURE;
         }
     }
-    return return_value;
+    printf("Closed semaphores\n");
+    return (executionError) ? EXIT_FAILURE : return_value;
 }
