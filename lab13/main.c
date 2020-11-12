@@ -18,8 +18,8 @@
 
 typedef struct {
     bool parent;
-    sem_t *sem1;
-    sem_t *sem2;
+    sem_t *wait_semaphore;
+    sem_t *post_semaphore;
     pthread_t *other_thread;
 } Thread_parameters;
 
@@ -38,20 +38,20 @@ void *printLines(void *args) {
     int error;
     Thread_parameters *parameters = (Thread_parameters *) args;
     char *name = (parameters->parent == true) ? "Parent" : "Child";
-    sem_t *sem1 = parameters->sem1;
-    sem_t *sem2 = parameters->sem2;
+    sem_t *wait_semaphore = parameters->wait_semaphore;
+    sem_t *post_semaphore = parameters->post_semaphore;
 
     for (int i = 1; i <= LINES_COUNT; i++) {
-        error = sem_wait(sem1);
+        error = sem_wait(wait_semaphore);
         if (error) {
-            printError("Could not lock semaphore", error);
+            perror("Could not lock semaphore");
             pthread_cancel(*(parameters->other_thread));
             return FAILURE;
         }
         printf("%s thread: line %d\n", name, i);
-        error = sem_post(sem2);
+        error = sem_post(post_semaphore);
         if (error) {
-            printError("Could not unlock semaphore", error);
+            perror("Could not unlock semaphore");
             pthread_cancel(*(parameters->other_thread));
             return FAILURE;
         }
@@ -70,11 +70,11 @@ void clearResources(void *args) {
     if (error) {
         printError("Could not join thread", error);
     }
-    error = sem_destroy(parameters->sem1);
+    error = sem_destroy(parameters->wait_semaphore);
     if (error) {
         printError("Could not destroy semaphore", error);
     }
-    error = sem_destroy(parameters->sem2);
+    error = sem_destroy(parameters->post_semaphore);
     if (error) {
         printError("Could not destroy semaphore", error);
     }
@@ -93,25 +93,25 @@ int main() {
     pthread_t child_thread;
     pthread_t main_thread = pthread_self();
     Thread_parameters parameters[THREADS_COUNT];
-    sem_t sem1, sem2;
+    sem_t parent_semaphore, child_semaphore;
     int error;
-    error = sem_init(&sem1, SHARED_SEMAPHORE, UNLOCKED_SEMAPHORE);
+    error = sem_init(&parent_semaphore, SHARED_SEMAPHORE, UNLOCKED_SEMAPHORE);
     if (error) {
         printError("Could not init semaphore", error);
         return EXIT_FAILURE;
     }
-    error = sem_init(&sem2, SHARED_SEMAPHORE, LOCKED_SEMAPHORE);
+    error = sem_init(&child_semaphore, SHARED_SEMAPHORE, LOCKED_SEMAPHORE);
     if (error) {
         printError("Could not init semaphore", error);
         return EXIT_FAILURE;
     }
 
-    parameters[PARENT].sem1 = &sem1;
-    parameters[PARENT].sem2 = &sem2;
+    parameters[PARENT].wait_semaphore = &parent_semaphore;
+    parameters[PARENT].post_semaphore = &child_semaphore;
     parameters[PARENT].parent = true;
     parameters[PARENT].other_thread = &child_thread;
-    parameters[CHILD].sem1 = &sem2;
-    parameters[CHILD].sem2 = &sem1;
+    parameters[CHILD].wait_semaphore = &child_semaphore;
+    parameters[CHILD].post_semaphore = &parent_semaphore;
     parameters[CHILD].parent = false;
     parameters[CHILD].other_thread = &main_thread;
 

@@ -17,6 +17,7 @@ typedef struct {
     pthread_t *other_thread;
     pthread_mutex_t *mutex;
     pthread_cond_t *condition;
+    bool need_to_unlock;
     bool *current_turn;
 } Thread_parameters;
 
@@ -41,6 +42,7 @@ void *printLines(void *args) {
     bool *current_turn = parameters->current_turn;
     pthread_mutex_t *mutex = parameters->mutex;
     pthread_cond_t *cond = parameters->condition;
+    parameters->need_to_unlock = true;
     error = pthread_mutex_lock(mutex);
     if (error) {
         printError("Could not lock mutex", error);
@@ -69,9 +71,9 @@ void *printLines(void *args) {
     error = pthread_mutex_unlock(mutex);
     if (error) {
         printError("Could not unlock mutex", error);
-        pthread_cancel(*(parameters->other_thread));
-        return FAILURE;
+        exit(EXIT_FAILURE);
     }
+    parameters->need_to_unlock = false;
     return NULL;
 }
 
@@ -81,7 +83,13 @@ void clearResources(void *args) {
     if (parameters == NULL) {
         return;
     }
-    pthread_mutex_unlock(parameters->mutex);
+    if (parameters->need_to_unlock) {
+        error = pthread_mutex_unlock(parameters->mutex);
+        if (error) {
+            printError("Could not unlock mutex", error);
+            exit(EXIT_FAILURE);
+        }
+    }
     error = pthread_join(*(parameters->other_thread), NULL);
     if (error) {
         printError("Could not join thread", error);
