@@ -21,7 +21,7 @@
 
 typedef void (*signalHandler)(int);
 
-int signalReceived = false;
+volatile int signalReceived = false;
 
 typedef struct {
     bool parent;
